@@ -8,20 +8,19 @@ with open("q-vercel-latency.json") as f:
 
 class handler(BaseHTTPRequestHandler):
 
-    def _send_json(self, data, status=200):
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
+    # ---------- CORS headers ----------
+    def _set_cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
 
-    # ✅ Proper CORS preflight response
+    # ---------- OPTIONS (preflight) ----------
     def do_OPTIONS(self):
-        self._send_json({}, 200)
+        self.send_response(204)          # IMPORTANT: 204 No Content
+        self._set_cors()
+        self.end_headers()               # NO BODY
 
-    # ✅ POST handler
+    # ---------- POST handler ----------
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length)
@@ -34,7 +33,6 @@ class handler(BaseHTTPRequestHandler):
 
         for region in regions:
             records = [r for r in DATA if r["region"] == region]
-
             if not records:
                 continue
 
@@ -48,4 +46,9 @@ class handler(BaseHTTPRequestHandler):
                 "breaches": sum(1 for l in latencies if l > threshold),
             }
 
-        self._send_json(result)
+        # ---------- send response ----------
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self._set_cors()
+        self.end_headers()
+        self.wfile.write(json.dumps(result).encode())
