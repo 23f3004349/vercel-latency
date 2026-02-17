@@ -11,7 +11,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.post("/")
+@app.post("")
 async def latency(request: Request):
     data = await request.json()
 
