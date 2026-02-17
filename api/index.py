@@ -1,41 +1,46 @@
-from http.server import BaseHTTPRequestHandler
-import json
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 import numpy as np
 
-class handler(BaseHTTPRequestHandler):
+app = FastAPI()
 
-    def _set_headers(self, status=200):
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
+# Enable CORS for ALL origins (required)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
-    # CORS preflight
-    def do_OPTIONS(self):
-        self._set_headers(200)
+@app.post("/api")
+async def latency(request: Request):
+    data = await request.json()
 
-    # POST endpoint
-    def do_POST(self):
-        content_length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(content_length)
+    regions = data.get("regions", [])
+    threshold = data.get("threshold_ms", 0)
 
-        data = json.loads(body or "{}")
+    records = [
+        {"region": "emea", "latency": 150, "uptime": 99.9},
+        {"region": "emea", "latency": 200, "uptime": 99.5},
+        {"region": "apac", "latency": 120, "uptime": 99.7},
+        {"region": "apac", "latency": 180, "uptime": 99.6},
+    ]
 
-        regions = data.get("regions", [])
-        threshold = data.get("threshold_ms", 0)
+    result = {}
 
-        records = [
-            {"region": "emea", "latency": 150, "uptime": 99.9},
-            {"region": "emea", "latency": 200, "uptime": 99.5},
-            {"region": "apac", "latency": 120, "uptime": 99.7},
-            {"region": "apac", "latency": 180, "uptime": 99.6},
-        ]
+    for r in regions:
+        vals = [x for x in records if x["region"] == r]
+        if not vals:
+            continue
 
-        result = {}
+        latencies = [v["latency"] for v in vals]
+        uptimes = [v["uptime"] for v in vals]
 
-        for r in regions:
-            vals = [x for x in records if x["region"] == r]
-            if not vals:
-                continue
+        result[r] = {
+            "avg_latency": float(np.mean(latencies)),
+            "p95_latency": float(np.percentile(latencies, 95)),
+            "avg_uptime": float(np.mean(uptimes)),
+            "breaches": int(sum(1 for l in latencies if l > threshold)),
+        }
+
+    return result
