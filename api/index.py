@@ -4,7 +4,7 @@ import numpy as np
 
 app = FastAPI()
 
-# Enable CORS for ALL origins (required)
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -12,7 +12,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.post("/api")
+@app.post("/")
 async def latency(request: Request):
     data = await request.json()
 
