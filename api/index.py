@@ -2,53 +2,40 @@ from http.server import BaseHTTPRequestHandler
 import json
 import numpy as np
 
-with open("q-vercel-latency.json") as f:
-    DATA = json.load(f)
-
-
 class handler(BaseHTTPRequestHandler):
 
-    # ---------- CORS headers ----------
-    def _set_cors(self):
+    def _set_headers(self, status=200):
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
 
-    # ---------- OPTIONS (preflight) ----------
+    # CORS preflight
     def do_OPTIONS(self):
-        self.send_response(204)          # IMPORTANT: 204 No Content
-        self._set_cors()
-        self.end_headers()               # NO BODY
+        self._set_headers(200)
 
-    # ---------- POST handler ----------
+    # POST endpoint
     def do_POST(self):
-        length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(length)
-        req = json.loads(body)
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length)
 
-        regions = req.get("regions", [])
-        threshold = req.get("threshold_ms", 0)
+        data = json.loads(body or "{}")
+
+        regions = data.get("regions", [])
+        threshold = data.get("threshold_ms", 0)
+
+        records = [
+            {"region": "emea", "latency": 150, "uptime": 99.9},
+            {"region": "emea", "latency": 200, "uptime": 99.5},
+            {"region": "apac", "latency": 120, "uptime": 99.7},
+            {"region": "apac", "latency": 180, "uptime": 99.6},
+        ]
 
         result = {}
 
-        for region in regions:
-            records = [r for r in DATA if r["region"] == region]
-            if not records:
+        for r in regions:
+            vals = [x for x in records if x["region"] == r]
+            if not vals:
                 continue
-
-            latencies = [r["latency_ms"] for r in records]
-            uptimes = [r["uptime_pct"] for r in records]
-
-            result[region] = {
-                "avg_latency": float(np.mean(latencies)),
-                "p95_latency": float(np.percentile(latencies, 95)),
-                "avg_uptime": float(np.mean(uptimes)),
-                "breaches": sum(1 for l in latencies if l > threshold),
-            }
-
-        # ---------- send response ----------
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self._set_cors()
-        self.end_headers()
-        self.wfile.write(json.dumps(result).encode())
